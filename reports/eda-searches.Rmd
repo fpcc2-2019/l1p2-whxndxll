@@ -1,26 +1,54 @@
 ---
 title: "EDA buscas"
-output: html_notebook
+author: "Whendell Feijó Magalhães"
+output:
+    html_document:
+        code_folding: hide
 ---
+
+<style>
+body{text-align: justify}
+</style>
+
 
 O objeto principal da análise são as buscas e a navegação depois da busca. Criamos esses dados a partir dos dados originais da wikimedia em `/data/search_data.csv`. 
 
 Aqui, exploramos esses dados. 
 
-```{r setup}
+```{r echo=FALSE, message=FALSE, warning=FALSE}
 library(tidyverse)
 library(here)
 library(lubridate)
 theme_set(theme_bw())
+
+knitr::opts_chunk$set(tidy = FALSE,
+                      echo = FALSE,
+                      fig.width = 8,
+                      fig.height = 6,
+                      fig.align = "center")
 ```
 
 ```{r ETL}
 buscas = read_csv(here::here("data/search_data.csv"))
 ```
+## 1. What is our daily overall clickthrough rate? How does it vary between the groups?
 
 ```{r}
+
 buscas %>% 
-    ggplot(aes(x = results)) + 
-    geom_histogram(binwidth = 5) 
+    ggplot(aes(x = num_clicks)) +
+    # scale_y_continuous(trans = "log2") +
+    geom_histogram()
+
+buscas %>% 
+    arrange(session_id) %>% 
+    mutate(i = rank(session_id)) %>% 
+    ggplot(aes(x = reorder(i,num_clicks), y = num_clicks)) +
+    scale_y_continuous(trans = "log2") +
+    geom_point()
+
+buscas %>% 
+    group_by(session_id) %>% 
+    summarise(session_total_clicks = sum(num_clicks))
 ```
 
