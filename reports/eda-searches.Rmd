@@ -19,6 +19,7 @@ Aqui, exploramos esses dados.
 library(tidyverse)
 library(here)
 library(lubridate)
+library(scales)
 theme_set(theme_bw())
 
 knitr::opts_chunk$set(tidy = FALSE,
@@ -40,15 +41,25 @@ buscas %>%
     # scale_y_continuous(trans = "log2") +
     geom_histogram()
 
-buscas %>% 
-    arrange(session_id) %>% 
-    mutate(i = rank(session_id)) %>% 
-    ggplot(aes(x = reorder(i,num_clicks), y = num_clicks)) +
-    scale_y_continuous(trans = "log2") +
-    geom_point()
+buscas <- mutate(buscas, day = round_date(buscas$session_start_date, "day"))
 
-buscas %>% 
-    group_by(session_id) %>% 
-    summarise(session_total_clicks = sum(num_clicks))
+buscas %>%
+    group_by(session_id,day) %>%
+    summarise(session_total_clicks = sum(num_clicks)) %>%  
+    ggplot(aes(x = day, y = session_total_clicks)) +
+    geom_point()
+    ```
+
+## Let session length be approximately the time between the first event and the last event in a session. Choose a variable from the dataset and describe its relationship to session length. Visualize the relationship.
+
+```{r}
+# buscas %>%
+#     group_by(session_id) %>% 
+#     summarise(search_index = max(search_index), session_length = max(session_length)) %>% 
+#     ggplot(aes(x = session_length, y = search_index)) +
+#     geom_point(alpha = .55)
+
+options(scipen = 999)
+
 ```
 
