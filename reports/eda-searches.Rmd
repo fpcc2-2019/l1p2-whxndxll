@@ -31,24 +31,52 @@ knitr::opts_chunk$set(tidy = FALSE,
 
 ```{r ETL}
 buscas = read_csv(here::here("data/search_data.csv"))
+
+Mode <- function(x) {
+     ux <- unique(x)
+     ux[which.max(tabulate(match(x, ux)))]
+}
+ 
 ```
 ## 1. What is our daily overall clickthrough rate? How does it vary between the groups?
 
 ```{r}
 
-buscas %>% 
-    ggplot(aes(x = num_clicks)) +
-    # scale_y_continuous(trans = "log2") +
-    geom_histogram()
+### Preprocessando os dados para criar uma nova coluna contendo unicamente o dia em que a sessão foi iniciada e removendo valores extremos que não fazem sentido com o contexto do problema (first_click > 500) 
 
-buscas <- mutate(buscas, day = round_date(buscas$session_start_date, "day"))
+buscas <- mutate(buscas, day = round_date(buscas$session_start_date, "day")) %>%
+    group_by(session_id) %>%
+    mutate(day = min(day)) %>% 
+    ungroup() %>% 
+    filter(is.na(first_click) | first_click <= 500)
 
-buscas %>%
-    group_by(session_id,day) %>%
-    summarise(session_total_clicks = sum(num_clicks)) %>%  
-    ggplot(aes(x = day, y = session_total_clicks)) +
-    geom_point()
-    ```
+sessoes <- buscas %>%
+    group_by(session_id, group, day) %>% 
+    summarise(num_clicks = any(num_clicks > 0)) %>% 
+    group_by(day, group)
+
+# buscas %>%
+#     group_by(session_id) %>% 
+#     mutate(num_clicks = max(num_clicks)) %>% 
+#     ungroup() %>% 
+#     group_by(day) %>%
+#     count(clicks_bigger_0 = num_clicks > 0) %>%
+#     mutate(total = sum(n)) %>% 
+#     filter(clicks_bigger_0 == TRUE) %>% 
+#     ungroup()
+
+# buscas %>%
+#     group_by(session_id,day) %>%
+#     summarise(session_total_clicks = sum(num_clicks)) %>% 
+#     ggplot(aes(x = day, y = session_total_clicks)) +
+#     geom_point()
+# 
+# buscas %>%
+#     group_by(session_id,day) %>%
+#     summarise(session_total_clicks = sum(num_clicks), group = Mode(group)) %>% 
+#     ggplot(aes(x = day, y = session_total_clicks, color = group)) +
+#     geom_point()
+```
 
 ## Let session length be approximately the time between the first event and the last event in a session. Choose a variable from the dataset and describe its relationship to session length. Visualize the relationship.
 
