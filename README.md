@@ -36,3 +36,7 @@ Existem 9 variáveis nos dados sendo elas:
 ## Dependências
 
 R, com os pacotes `tidyverse`, `lubridate` e `here`.
+
+## Resultado da análise
+
+O relatório da análise exploratória e descritiva encontra-se publicamente disponível através do link: http://rpubs.com/whxndxll/wikimedia-eda
