@@ -20,7 +20,8 @@ library(tidyverse)
 library(here)
 library(lubridate)
 library(scales)
-library(formattable)
+library(broom)
+library(boot)
 theme_set(theme_gray())
 
 knitr::opts_chunk$set(tidy = FALSE,
@@ -41,196 +42,102 @@ buscas <- mutate(buscas, day = round_date(buscas$session_start_date, "day")) %>%
 
 ```
 
-### 1. Qual é nossa taxa de cliques diárias geral? Como ela varia entre os grupos?
-
-#### Nos gráficos abaixo podemos visualizar a taxa de cliques diárias (sessões com ao menos um clique dividido pelo número total de sessões em determinado dia). A linha tracejada perpendicular ao eixo y representa a média das taxas de cliques de todos os dias.
+###
 
 ```{r}
-
 sessoes <- buscas %>%
     group_by(session_id, group, day) %>% 
     summarise(has_clicks = any(num_clicks > 0)) %>% 
-    group_by(day, group) 
+    ungroup()
 
 sessoes %>% 
-    filter(group == "a") %>% 
-    group_by(day) %>%
-    summarise(clickthrough_rate = sum(has_clicks) / n()) %>% 
-    ggplot(aes(x = day,y = clickthrough_rate)) +
-    geom_line(linetype ="dotted") +
-    geom_point(size = 2.5, color = "indianred3") +
-    geom_hline(aes(yintercept=mean(clickthrough_rate)), linetype = "dashed", color = "indianred3") +
-    ylab("Taxa de cliques") +
-    xlab("Dia") +
-    ylim(0.64,0.71) +
-    ggtitle("\t\t\t\t Taxa de cliques diária - grupo A")
-
-sessoes %>% 
-    filter(group == "b") %>% 
-    group_by(day) %>%
-    summarise(clickthrough_rate = sum(has_clicks) / n()) %>% 
-    ggplot(aes(x = day,y = clickthrough_rate)) +
-    geom_line(linetype ="dotted") +
-    geom_point(size = 2.5, color = "lightblue3") +
-    geom_hline(aes(yintercept=mean(clickthrough_rate)), linetype = "dashed", color = "lightblue3") +
-    ylab("Taxa de cliques") +
-    xlab("Dia") +
-    ylim(0.13,0.20) +
-    ggtitle("\t\t\t\t Taxa de cliques diária - grupo B")
-
-```
-
-#### Como podemos observar, a taxa para as sessões do grupo 'a' são maiores para todos os dias analisados, além disso variam menos em torno da média. Enquanto as sessões do grupo 'b' variam mais dia-a-dia, as taxas são bastante inferiores às do grupo 'a'.
-
-### 2. Quais resultados as pessoas tendem a tentar primeiro? Como isto muda dia-a-dia?
-
-#### Para começar a responder essa pergunta, analisei quais os 5 valores mais frequentes e suas distribuições absolutas e relativas, para as buscas em que há ao menos 1 clique. O resultado é apresentado na tabela abaixo.
-
-```{r}
-buscas_without_na <- filter(buscas, !is.na(first_click))
-most_common <- sort(table(buscas_without_na$first_click),decreasing=TRUE)[1:5]
-total <- length(buscas_without_na$first_click)
-percent_occurrence <- most_common / total
-tibble(Valor = 1:5, Ocorrências = most_common, Percentual = percent_occurrence) %>% 
-    formattable()
-```
-
-#### Os gráficos abaixo apresentam proporção de cliques por valor ao longo dos dias. No primeiro temos os 5 valores mais frequentes, já no segundo gráfico temos do 2º ao 5º valor mais frequente. Vi a necessidade de fazer essas duas visualizações pois a taxa de ocorrêncio do valor 1 era muito maior que os demais, dificultando a comparação em escala linear.
-
-```{r}
-buscas %>% 
-    filter(!is.na(first_click)) %>% 
-    group_by(day) %>% 
-    summarise(ratio_1 = sum(first_click == 1) / n(),
-              ratio_2 = sum(first_click == 2) / n(),
-              ratio_3 = sum(first_click == 3) / n(),
-              ratio_4 = sum(first_click == 4) / n(),
-              ratio_5 = sum(first_click == 5) / n()) %>% 
-    ggplot(aes(x=day)) +
-    geom_point(aes(y= ratio_1, color = "1")) +
-    geom_point(aes(y= ratio_2, color = "2")) +
-    geom_point(aes(y= ratio_3, color = "3")) +
-    geom_point(aes(y= ratio_4, color = "4")) +
-    geom_point(aes(y= ratio_5, color = "5")) +
-    scale_y_continuous(breaks = seq(0.0, 0.65, 0.05)) +
-    labs(colour = "Valor") + 
-    ggtitle("\t 5 valores mais frequentes e taxas de ocorrência por dia ")
-
-buscas %>% 
-    filter(!is.na(first_click)) %>% 
-    group_by(day) %>% 
-    summarise(ratio_1 = sum(first_click == 1) / n(),
-              ratio_2 = sum(first_click == 2) / n(),
-              ratio_3 = sum(first_click == 3) / n(),
-              ratio_4 = sum(first_click == 4) / n(),
-              ratio_5 = sum(first_click == 5) / n()) %>% 
-    ggplot(aes(x=day)) +
-    geom_point(aes(y= ratio_2, color = "2")) +
-    geom_point(aes(y= ratio_3, color = "3")) +
-    geom_point(aes(y= ratio_4, color = "4")) +
-    geom_point(aes(y= ratio_5, color = "5")) +
-    scale_y_continuous(breaks = seq(0.0, 0.16, 0.02)) +
-    ylab("Taxa de ocorrência") +
-    labs(colour = "Valor") + 
-    ggtitle("\t 2º ao 5º valores mais frequentes e taxas de ocorrência por dia")
-```
-
-#### Como podemos observar em ambos os gráficos, apesar de haver uma flutuação na taxa de ocorrência de cada valor ao longo dos dias, o padrão se mantém de forma que os mesmos valores ocupam a mesma posição no "ranking" ao longo de todos os dias. Importante observar que as maiores variações diárias acontecem nos valores 1 e 2, para os demais valores há uma maior constância.
-
-### 3. Qual é nossa taxa diária de buscas com zero resultados? Como ela varia entre os grupos?
-
-#### Na visualização abaixo apresento a taxa diária de buscas com zero resultados separadas por grupos. Como pode ser observado, apesar dos grupos apresentarem diferença na variação dia-a-dia, os valores são bem mais próximos que os valores da taxa de cliques apresentados na questão '1'.  Assim como nos gráficos da questão '1', a linha tracejada perpendicular ao eixo-y representa a média das taxas diárias. A uma maior variação em torno da média para as taxas do grupo 'a' que as do grupo 'b'.
-
-```{r}
+    group_by(group) %>%
+    summarise(clickthrough_rate = sum(has_clicks) / n()) -> ctr
 
 buscas %>% 
     mutate(has_results = results > 0) %>%
-    group_by(day,group) %>% 
-    summarise(zero_results_rate = 1 - (sum(has_results) / n())) %>% 
     group_by(group) %>% 
-    mutate(mean_per_group = mean(zero_results_rate)) %>% 
-    ggplot(aes(x = day,y = zero_results_rate)) +
-    geom_line(linetype ="dotted") +
-    geom_point(size = 2.5, color = "indianred3") +
-    geom_hline(aes(yintercept = mean_per_group), linetype = "dashed", color = "indianred3") +
-    ylab("Taxa de buscas c 0 resultados") +
-    xlab("Dia") +
-    ylim(0.17,0.21) +
-    facet_grid(~ group) +
-    ggtitle("\t\t Taxa de buscas com zeros resultados diária por grupo")
-
+    summarise(zero_results_rate = 1 - (sum(has_results) / n())) -> zrr
 ```
 
-### 4. Tome session_length como aproximadamente o tempo entre o primeiro e o último evento em determinada sessão. Escolha uma variável do datase e descreva sua relação com session_length. Visualize a relação. 
+###
 
-```{r echo=FALSE}
-options(scipen = 999)
+```{r}
+theta_diferenca_clickthrough_rate = function(d, i){
+    click_rate = d %>% 
+        slice(i) %>% 
+        group_by(group) %>%
+        summarise(clickthrough_rate = sum(has_clicks) / n())
+    
+    group_a = click_rate %>% filter(group == "a") %>% pull(clickthrough_rate)
+    group_b = click_rate %>% filter(group == "b") %>% pull(clickthrough_rate)
+    
+    group_a - group_b
+}
 
-buscas %>% 
-    ggplot(aes(session_length)) +
-    geom_density() +
-    scale_x_continuous(breaks = seq(0,500000,25000)) +
-    theme(axis.text.x = element_text(angle = 45, hjust = 1))
+theta_diferenca_zero_results_rate = function(d, i){
+    zero_rate = d %>% 
+        slice(i) %>% 
+        mutate(has_results = results > 0) %>%
+        group_by(group) %>% 
+        summarise(zero_results_rate = 1 - (sum(has_results) / n()))
+    
+    group_a = zero_rate %>% filter(group == "a") %>% pull(zero_results_rate)
+    group_b = zero_rate %>% filter(group == "b") %>% pull(zero_results_rate)
+    
+    group_a - group_b
+}
 ```
 
-#### Como pode ser observado no gráfico de densidade acima, a distribuição da variável session_length está quase totalmente concentrada em valores próximos a 0 e uma cauda muito longa mas com poucas ocorrências de valores maiores que 12500. Baseado nessa visualização, eu filtro os valores de session_length < 12500.
+### Usando IC para clickthrough_rate
 
-#### Os gráficos abaixo apresentam a relação em escala linear entre a duração das sessões e o número de cliques por sessão, tanto considerando todas as sessões, quanto separando por grupos. Essa visualização demonstra, inclusive pela grande variedade de valores de duração de sessão para um mesmo valor de número de cliques, que não há correlação linear entre as variáveis.
-
-```{r echo=FALSE}
-buscas %>%
-    filter(session_length < 12500) %>% 
-    group_by(session_id) %>% 
-    summarise(clicks_per_session = sum(num_clicks), session_length = max(session_length)) %>%
-    filter(clicks_per_session > 0) %>% 
-    ggplot(aes(x = clicks_per_session, y = session_length)) +
-    geom_point(alpha = .55) +
-    xlab("#Cliques por Sessão") +
-    ylab("Duração da Sessão") + 
-    ggtitle("\t  Relação entre a duração da sessão e # de cliques por sessão")
-
-buscas %>%
-    filter(session_length < 12500) %>% 
-    group_by(session_id, group) %>% 
-    summarise(clicks_per_session = sum(num_clicks), session_length = max(session_length)) %>%
-    filter(clicks_per_session > 0) %>% 
-    ggplot(aes(x = clicks_per_session, y = session_length)) +
-    geom_point(alpha = .55) +
-    facet_grid(~ group) +
-    xlab("#Cliques por Sessão") +
-    ylab("Duração da Sessão") + 
-    ggtitle("\t  Relação entre a duração da sessão e # de cliques por sessão por grupo")
+```{r}
+sessoes %>%
+    boot(statistic = theta_diferenca_clickthrough_rate, R = 4000) %>%
+    tidy(conf.level = 0.95,
+         conf.int = TRUE)
 ```
+
+### Usando IC para zero_results_rate
 
 ```{r}
 buscas %>%
-    filter(session_length < 12500) %>% 
-    group_by(session_id, group) %>% 
-    summarise(clicks_per_session = sum(num_clicks), session_length = max(session_length)) %>%
-    filter(clicks_per_session > 0) %>% 
-    ggplot(aes(x = clicks_per_session, y = session_length)) +
-    geom_point(alpha = .55) +
-    facet_grid(~ group) +
-    scale_y_continuous(trans = "log2") +
-    scale_x_continuous(trans = "log2") +
-    xlab("#Cliques por Sessão") +
-    ylab("Duração da Sessão") + 
-    ggtitle("\t  Relação separada por grupo em escala log2")
+    boot(statistic = theta_diferenca_zero_results_rate, R = 4000) %>%
+    tidy(conf.level = 0.95,
+         conf.int = TRUE)
+
 ```
 
-#### Quando aplicada uma transformação logaritímica nos dois eixos, ainda não é possível identificar uma relação forte entre as variáveis. Somente se considerarmos os números de cliques maiores que 8 para o grupo 'a', é possível identificar uma correlação polinomial positiva forte entre as variáveis nesse intervalo, mas a quantidade de ocorrências nesse intervalo é numericamente muito inferior ao total de observações, o que não permite uma generalização me levando a inferir que há uma correlação fraca. A tabela abaixo apresenta os coeficiente de Pearson, Kendall e Spearman para a correlação da duração das sessões com o número de cliques por sessão.
+###
 
 ```{r}
-buscas %>%
-    filter(session_length < 12500) %>% 
-    group_by(session_id, group) %>% 
-    summarise(clicks_per_session = sum(num_clicks), session_length = max(session_length)) %>%
-    ungroup() %>% 
-    select(clicks_per_session,session_length) %>% 
-    filter(clicks_per_session > 0) %>%
-    summarise(pearson = cor(clicks_per_session, session_length, method = "pearson"), 
-              spearman = cor(clicks_per_session, session_length, method = "spearman"),
-              kendall = cor(clicks_per_session, session_length, method = "kendall")) %>% 
-    formattable()
-```
+theta_embaralhado_clickthrough_rate = function(d){
+    click_rate = d %>% 
+        mutate(group_embaralhada = sample(group, n())) %>% 
+        group_by(group_embaralhada) %>%
+        summarise(clickthrough_rate = sum(has_clicks) / n())
+    
+    group_a = click_rate %>% filter(group_embaralhada == "a") %>% pull(clickthrough_rate)
+    group_b = click_rate %>% filter(group_embaralhada == "b") %>% pull(clickthrough_rate)
+    
+    group_a - group_b
+}
 
+theta_embaralhado_zero_results_rate = function(d){
+    zero_rate = d %>% 
+        mutate(group_embaralhada = sample(group, n())) %>% 
+        mutate(has_results = results > 0) %>%
+        group_by(group_embaralhada) %>%
+        summarise(zero_results_rate = 1 - (sum(has_results) / n()))
+    
+    group_a = zero_rate %>% filter(group_embaralhada == "a") %>% pull(zero_results_rate)
+    group_b = zero_rate %>% filter(group_embaralhada == "b") %>% pull(zero_results_rate)
+    
+    group_a - group_b
+}
+
+theta_embaralhado_clickthrough_rate(sessoes)
+
+theta_embaralhado_zero_results_rate(buscas)
+```
+### Teste de hipótese usando permutação
